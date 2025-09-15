@@ -3,7 +3,7 @@ use actix_web::{
     http::header::LOCATION,
 };
 use rand::{Rng, distr::Alphanumeric};
-use std::{collections::HashSet, sync::Mutex};
+use std::{collections::{HashSet, HashMap}, sync::Mutex};
 use actix_web::web::Form;
 
 #[derive(serde::Deserialize)]
@@ -11,9 +11,15 @@ struct JoinSessionForm {
     session_id: String,
 }
 
+#[derive(serde::Deserialize)]
+struct AddPlayerForm {
+    username: String,
+}
+
 // Shared app state for storing session IDs
 struct AppState {
     sessions: Mutex<HashSet<String>>,
+    players: Mutex<HashMap<String, HashSet<String>>>, // sessionID -> players set
 }
 
 //generate a unique random 5-char string not in sessions
@@ -38,10 +44,19 @@ async fn main_page( data: web::Data<AppState>) -> impl Responder {
         .map(|s| format!(r#"<li><a href="/{}">{}</a></li>"#, s, s))
         .collect::<String>();
 
+    let players = data.players.lock().unwrap();
+    let players_list = players.iter()
+        .map(|p| format!(r#"<li>{}</a></li>"#,p))
+        .collect::<String>();
+
     let html= format!( r#"
     <html>
         <head><title>Main Page</title></head>
         <body>
+            <form method="post" action="/add_player">
+                <input type="text" name="username" placeholder="Enter username" required />
+                <button type="submit">Add Player</button>
+            </form>
             <form method="post" action="/create_session">
                 <button type="submit">Create Session</button>
             </form>
@@ -51,10 +66,12 @@ async fn main_page( data: web::Data<AppState>) -> impl Responder {
                 <button type="submit">Join Session</button>
             </form>
             <h2>Active Sessions</h2>
-            <ul>{}</ul>
+            <ul>{sessions_list}</ul>
+            <h2>Players</h2>
+            <ul>{players_list}</ul>
         </body>
     </html>
-    "#, sessions_list);
+    "#, );
     HttpResponse::Ok().content_type("text/html").body(html)
 }
 
@@ -108,10 +125,33 @@ async fn session_page(path: web::Path<String>, data: web::Data<AppState>) -> imp
     }
 }
 
+// Handler for adding Players
+async fn add_player(form: Form<AddPlayerForm>, data: web::Data<AppState>) -> Result<HttpResponse> {
+    let mut players = data.players.lock().unwrap();
+
+    //check if username is taken
+    if !players.insert(form.username.trim().to_string()) {
+        // Username already exists
+        return Ok(HttpResponse::BadRequest().body("Username already taken"));
+    }
+
+    Ok(HttpResponse::Found()
+           .insert_header((LOCATION, "/"))
+           .finish())
+}
+
+async fn add_player_to_session(data: web::Data<AppState>, session_id: &str, username: &str) -> bool {
+    let mut players_map = data.players.lock().unwrap();
+    let player_set = players_map.entry(session_id.to_string())
+        .or_insert_with(HashSet::new);
+    player_set.insert(username.to_string())
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let app_state = web::Data::new(AppState {
-        sessions: Mutex::new(HashSet::new())
+        sessions: Mutex::new(HashSet::new()),
+        players: Mutex::new(HashMap::new())
     });
 
     println!("Starting server at http://localhost:8080");
@@ -122,6 +162,7 @@ async fn main() -> std::io::Result<()> {
             .route("/create_session", web::post().to(create_session))
             .route("/join_session", web::post().to(join_session))
             .route("/{session_id}", web::get().to(session_page))
+            .route("/add_player", web::post().to(add_player))
     })
         .bind("127.0.0.1:8080")?
         .run()
