@@ -3,16 +3,6 @@
 version = 4
 
 [[package]]
-name = "MemeGameServer"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "http 1.3.1",
- "rand",
- "serde",
-]
-
-[[package]]
 name = "actix-codec"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -329,6 +319,10 @@ name = "cfg-if"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fd1289c04a9ea8cb22300a459a72a385d7c73d3259e2ed7dcb2af674838cfa9"
+
+[[package]]
+name = "client"
+version = "0.1.0"
 
 [[package]]
 name = "cookie"
@@ -1071,6 +1065,16 @@ dependencies = [
  "form_urlencoded",
  "itoa",
  "ryu",
+ "serde",
+]
+
+[[package]]
+name = "server"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "http 1.3.1",
+ "rand",
  "serde",
 ]
 
